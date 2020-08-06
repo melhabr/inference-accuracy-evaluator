@@ -8,6 +8,8 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
 
+from stopwatch import Stopwatch
+
 class TensorRTInferencer:
 
     def __init__(self, model):
@@ -39,9 +41,11 @@ class TensorRTInferencer:
                 self.cuda_outputs.append(cuda_mem)
         self.context = engine.create_execution_context()
 
+        self.watch = Stopwatch()
+
     def inference(self, img):
 
-        # Preprocessing:
+        self.watch.start()
         ih, iw = img.shape[:-1]
         if (iw, ih) != self.input_shape:
             img = cv2.resize(img, self.input_shape)
@@ -49,15 +53,18 @@ class TensorRTInferencer:
         img = img.transpose((2, 0, 1)).astype(np.float32)
         img *= (2.0 / 255.0)
         img -= 1.0
+        self.watch.stop(Stopwatch.MODE_PREPROCESS)
 
+        self.watch.start()
         np.copyto(self.host_inputs[0], img.ravel())
-
         cuda.memcpy_htod_async(self.cuda_inputs[0], self.host_inputs[0], self.stream)
         self.context.execute_async(batch_size=1, bindings=self.bindings, stream_handle=self.stream.handle)
         cuda.memcpy_dtoh_async(self.host_outputs[1], self.cuda_outputs[1], self.stream)
         cuda.memcpy_dtoh_async(self.host_outputs[0], self.cuda_outputs[0], self.stream)
         self.stream.synchronize()
+        self.watch.stop(Stopwatch.MODE_INFER)
 
+        self.watch.start()
         output = self.host_outputs[0]
         results = []
         for prefix in range(0, len(output), 7):
@@ -71,5 +78,6 @@ class TensorRTInferencer:
             y2 = (output[prefix + 6] - output[prefix + 4]) * ih
             cls = int(output[prefix + 1])
             results.append(((x1, y1, x2, y2), cls, conf))
+        self.watch.stop(Stopwatch.MODE_POSTPROCESS)
 
         return results

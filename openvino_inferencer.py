@@ -24,6 +24,8 @@ import cv2
 
 from openvino.inference_engine import IECore, IENetwork
 
+from stopwatch import Stopwatch
+
 class OpenVINOInferencer:
 
     def __init__(self, model, device):
@@ -63,8 +65,6 @@ class OpenVINOInferencer:
                 infos[i, 2] = 1.0
             self.data[input_info_name] = infos
 
-        # ---------------------------------------- 4. Prepare output blobs ------------------------------------
-
         output_name, output_info = "", net.outputs[next(iter(net.outputs.keys()))]
         for output_key in net.outputs:
             if net.layers[output_key].type == "DetectionOutput":
@@ -85,18 +85,25 @@ class OpenVINOInferencer:
 
         self.exec_net = ie.load_network(network=net, device_name=device)
 
+        self.watch = Stopwatch()
+
     def inference(self, img):
 
+        self.watch.start()
         ih, iw = img.shape[:-1]
         if (ih, iw) != (self.h, self.w):
             img = cv2.resize(img, (self.w, self.h))
         img = img.transpose((2, 0, 1))  # Change data layout from HWC to CHW
+        self.watch.stop(Stopwatch.MODE_PREPROCESS)
 
+        self.watch.start()
         self.data[self.input_name] = img
         res = self.exec_net.infer(inputs=self.data)
         res = res[self.out_blob]
         res = res[0][0]
+        self.watch.stop(Stopwatch.MODE_INFER)
 
+        self.watch.start()
         results = []
         for proposal in res:
 
@@ -114,5 +121,6 @@ class OpenVINOInferencer:
 
             result = (box, int(proposal[1]), proposal[2])
             results.append(result)
+        self.watch.stop(Stopwatch.MODE_POSTPROCESS)
 
         return results

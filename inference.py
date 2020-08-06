@@ -4,9 +4,9 @@ import cv2
 import json
 
 from tf_inferencer import TFInferencer
-from edgetpu_inferencer import EdgeTPUInferencer
-from tensorrt_inferencer import TensorRTInferencer
-from openvino_inferencer import OpenVINOInferencer
+#from edgetpu_inferencer import EdgeTPUInferencer
+#from tensorrt_inferencer import TensorRTInferencer
+#from openvino_inferencer import OpenVINOInferencer
 
 
 def main():
@@ -44,6 +44,8 @@ def main():
             results.append(entry)
 
         print("Inferenced image", i)
+
+    inferencer.watch.report()
 
     with open("results.json", "w") as f:
         f.write(json.dumps(results))

@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 import cv2
 
+from stopwatch import Stopwatch
 
 class TFInferencer:
 
@@ -17,18 +18,24 @@ class TFInferencer:
             tf.import_graph_def(graph_def, name='', input_map={'image_tensor': self.input_node})
 
         self.sess = tf.Session(graph=graph)
+        self.watch = Stopwatch()
 
     def inference(self, img):
 
+        self.watch.start()
         (ih, iw) = img.shape[:-1]
         if (iw, ih) != (300, 300):
             img = cv2.resize(img, (300, 300))
         img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         img = img.reshape((1, 300, 300, 3))
+        self.watch.stop(Stopwatch.MODE_PREPROCESS)
 
+        self.watch.start()
         out = self.sess.run(['detection_classes:0', 'detection_scores:0', 'detection_boxes:0'],
                             feed_dict={self.input_node: img})
+        self.watch.stop(Stopwatch.MODE_INFER)
 
+        self.watch.start()
         results = []
         for i in range(len(out[0][0])):
 
@@ -45,5 +52,6 @@ class TFInferencer:
             res = (boxes, out[0][0][i], out[1][0][i])
 
             results.append(res)
+        self.watch.stop(Stopwatch.MODE_POSTPROCESS)
 
         return results
